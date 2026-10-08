@@ -229,6 +229,8 @@ def exibir_resumo(gerenciador):
 # ----------------------------------------------------------------------
 def main():
     gerenciador = GerenciadorTarefas()
+    if gerenciador.aviso_carregamento:
+        print(f"[AVISO] {gerenciador.aviso_carregamento}")
 
     acoes = {
         "1": cadastrar_tarefa,
