@@ -1,0 +1,3 @@
+# A aplicação TaskTracker utiliza apenas a biblioteca padrão do Python 3.
+# A dependência abaixo é necessária somente para executar os testes automatizados (tests/).
+pytest>=8.0
