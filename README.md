@@ -1,35 +1,125 @@
 # TaskTracker — Gerenciador de Tarefas em Linha de Comando
 
-Aplicação CLI (Interface de Linha de Comando) em **Python 3** para registrar, consultar e controlar tarefas do dia a dia de forma simples e organizada.
+Aplicação CLI (Interface de Linha de Comando) em **Python 3** para registrar, consultar e controlar tarefas do dia a dia, empacotada com **Docker** para rodar de forma idêntica em qualquer ambiente.
 
-> **Bootcamp II — Desafio Cumulativo · Fase 2 (Entrega Intermediária)**
-> Estruturação do repositório, versionamento com Git/GitHub, implementação da lógica em Python e validação das regras de negócio.
+> **Bootcamp II — Desafio Cumulativo · Fase 3 (Entrega Final)**
+> Conteinerização, orquestração e deploy do TaskTracker.
 
 | | |
 |---|---|
 | **Autor** | João Pedro Pinheiro Ghesti |
 | **Curso** | Ciência de Dados e Machine Learning |
 | **Polo** | Asa Norte |
-| **Vídeo de apresentação** | _[cole aqui o link do vídeo no YouTube]_ |
+| **Vídeo de apresentação — Fase 3** | _[cole aqui o link do vídeo no YouTube]_ |
 
 ---
 
 ## Sumário
 
+- [Execução com Docker (início rápido)](#execução-com-docker-início-rápido)
+- [Como a conteinerização funciona](#como-a-conteinerização-funciona)
 - [O problema](#o-problema)
 - [Funcionalidades](#funcionalidades)
 - [Regras de negócio](#regras-de-negócio)
 - [Estrutura de dados da tarefa](#estrutura-de-dados-da-tarefa)
 - [Tecnologias utilizadas](#tecnologias-utilizadas)
 - [Estrutura do repositório](#estrutura-do-repositório)
-- [Instalação](#instalação)
-- [Execução](#execução)
+- [Execução local (sem Docker)](#execução-local-sem-docker)
 - [Exemplo de uso](#exemplo-de-uso)
 - [Testes automatizados](#testes-automatizados)
 - [Histórico de versionamento](#histórico-de-versionamento)
-- [Próximos passos (Fase 3)](#próximos-passos-fase-3)
+- [Evolução do projeto](#evolução-do-projeto)
 
 ---
+
+## Execução com Docker (início rápido)
+
+**Pré-requisito:** [Docker](https://docs.docker.com/get-docker/) instalado (Docker Desktop no Windows/macOS ou Docker Engine + plugin Compose no Linux). Não é necessário ter Python instalado na máquina.
+
+Clone o repositório e entre na pasta do projeto:
+
+```bash
+git clone https://github.com/<seu-usuario>/tasktracker-projeto.git
+cd tasktracker-projeto
+```
+
+### 1. Como construir a imagem
+
+```bash
+docker build -t tasktracker-app .
+```
+
+### 2. Como rodar o container em modo isolado
+
+```bash
+docker run -it --rm tasktracker-app
+```
+
+- `-i` mantém a entrada de dados aberta para o `input()` da aplicação;
+- `-t` aloca um terminal virtual, simulando o console;
+- `--rm` remove o container ao sair do programa.
+
+> Neste modo as tarefas ficam apenas dentro do container e são descartadas ao sair. Para guardá-las, use a orquestração (abaixo) ou acrescente um volume: `docker run -it --rm -v tasktracker-dados:/app/data tasktracker-app`.
+
+### 3. Como rodar via orquestração (recomendado)
+
+```bash
+docker compose run --rm tasktracker-app
+```
+
+O `docker-compose.yml` já define o build, o modo interativo (`stdin_open` e `tty`) e um volume que **mantém as tarefas salvas entre execuções**. Na primeira vez, o Compose constrói a imagem automaticamente; para reconstruí-la após alterar o código, use `docker compose build`.
+
+> Use `docker compose run`, e não `docker compose up`: o `up` não conecta o teclado ao menu da aplicação.
+
+### Comandos úteis
+
+| Objetivo | Comando |
+|---|---|
+| Listar a imagem criada | `docker images tasktracker-app` |
+| Reconstruir a imagem pelo Compose | `docker compose build` |
+| Apagar as tarefas salvas no volume | `docker compose down -v` |
+
+## Como a conteinerização funciona
+
+| | `Dockerfile` (a receita) | `docker-compose.yml` (o maestro) |
+|---|---|---|
+| **Papel** | Empacota a aplicação e suas dependências | Orquestra a execução interativa da CLI |
+| **Saída** | Gera a imagem `tasktracker-app` | Roda o container com os parâmetros definidos |
+| **Comando-chave** | `docker build` | `docker compose run` |
+
+### Decisões do `Dockerfile`
+
+| Instrução | Por quê |
+|---|---|
+| `FROM python:3.11-slim` | Base leve e oficial com Python 3.11, sem pacotes desnecessários. |
+| `ENV PYTHONUNBUFFERED=1` | Envia a saída do `print()` imediatamente ao terminal, sem buffer. |
+| `ENV PYTHONDONTWRITEBYTECODE=1` | Evita criar `__pycache__/` e `.pyc` dentro do container. |
+| `ENV PYTHONIOENCODING=utf-8` | Garante acentuação correta na entrada e na saída (ex.: `Média`). |
+| `ENV TZ="<-03>3"` | Fuso de Brasília (UTC-3), para que a regra "data limite não pode ser anterior a hoje" use a data local. |
+| `WORKDIR /app` | Define a pasta central de operações. |
+| `RUN useradd ... appuser` + `USER appuser` | Executa a aplicação sem privilégios de administrador (boa prática de segurança). |
+| `COPY src/ /app/src/` e `COPY data/ /app/data/` | Injeta o código-fonte e a pasta de dados no container. |
+| `CMD ["python", "src/main.py"]` | Gatilho que dispara a execução da aplicação. |
+
+A aplicação usa apenas a biblioteca padrão do Python, então a imagem não precisa de `pip install`. O arquivo `.dockerignore` deixa de fora do build o que não é necessário para rodar (testes, documentação, `.git`, caches), deixando o build mais rápido e a imagem mais leve.
+
+### Orquestração e interatividade
+
+A CLI usa `input()`, e um container isolado não recebe dados do teclado por padrão. O `docker-compose.yml` cria esse canal:
+
+```yaml
+services:
+  tasktracker-app:
+    build: { context: ., dockerfile: Dockerfile }
+    image: tasktracker-app
+    stdin_open: true   # mantém a entrada de dados aberta (equivale a -i)
+    tty: true          # aloca um terminal virtual (equivale a -t)
+    volumes:
+      - tasktracker-dados:/app/data   # persiste data/tarefas.json
+
+volumes:
+  tasktracker-dados:
+```
 
 ## O problema
 
@@ -65,7 +155,7 @@ Menu principal em loop contínuo:
 | **5. Exibir resumo** | Mostra o total de tarefas pendentes, concluídas e o total geral. |
 | **6. Sair da aplicação** | Encerra o programa. |
 
-As tarefas são gravadas em `data/tarefas.json`, portanto continuam disponíveis na próxima execução.
+As tarefas são gravadas em `data/tarefas.json`, portanto continuam disponíveis na próxima execução (no Docker, dentro do volume `tasktracker-dados`).
 
 ## Regras de negócio
 
@@ -112,7 +202,8 @@ Exemplo de `data/tarefas.json`:
 
 ## Tecnologias utilizadas
 
-- **Python 3.8+** — somente biblioteca padrão (`dataclasses`, `datetime`, `json`, `pathlib`, `re`)
+- **Python 3** (3.11 na imagem Docker; 3.8+ para execução local) — somente biblioteca padrão (`dataclasses`, `datetime`, `json`, `pathlib`, `re`)
+- **Docker** e **Docker Compose** — empacotamento e orquestração
 - **pytest** — testes automatizados
 - **Git** e **GitHub** — versionamento e publicação do código
 
@@ -120,8 +211,11 @@ Exemplo de `data/tarefas.json`:
 
 ```
 tasktracker-projeto/
-├── README.md               # Documentação principal e instruções de uso
 ├── .gitignore              # Ignora __pycache__/, *.pyc, .venv/ e outros temporários
+├── .dockerignore           # Arquivos que ficam fora do build da imagem
+├── Dockerfile              # Receita da imagem Docker (Fase 3)
+├── docker-compose.yml      # Orquestração da execução interativa (Fase 3)
+├── README.md               # Documentação principal e instruções de uso
 ├── requirements.txt        # Dependências do projeto (pytest para os testes)
 ├── docs/
 │   └── planejamento_logico.pdf   # Planejamento lógico e arquitetural da Fase 1
@@ -139,9 +233,9 @@ tasktracker-projeto/
 
 Cada arquivo de `src/` tem uma responsabilidade única, conforme o mapeamento arquitetural da Fase 1.
 
-## Instalação
+## Execução local (sem Docker)
 
-Pré-requisitos: **Python 3.8 ou superior** e **Git**.
+Alternativa para desenvolvimento. Pré-requisitos: **Python 3.8 ou superior** e **Git**.
 
 ```bash
 # 1. Clonar o repositório
@@ -159,9 +253,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Execução
-
-A partir da raiz do projeto:
+Para executar, a partir da raiz do projeto:
 
 ```bash
 python src/main.py
@@ -185,8 +277,8 @@ Prioridade (Alta / Média / Baixa): Urgente
 [ERRO] Prioridade inválida. Digite apenas Alta, Média (ou Media) ou Baixa.
 Prioridade (Alta / Média / Baixa): media
 Data limite (DD/MM/AAAA): 01/01/2020
-[ERRO] A data limite não pode ser anterior à data atual (08/10/2026).
-Data limite (DD/MM/AAAA): 20/10/2026
+[ERRO] A data limite não pode ser anterior à data atual (22/10/2026).
+Data limite (DD/MM/AAAA): 30/10/2026
 
 [OK] Tarefa "Estudar Git" cadastrada com sucesso! (ID 1)
 ```
@@ -203,13 +295,15 @@ TAREFAS PENDENTES (ordenadas por prioridade e data limite)
   Título ......: Estudar Git
   Descrição ...: Ler capítulo sobre branches
   Prioridade ..: Média
-  Data limite .: 20/10/2026
+  Data limite .: 30/10/2026
   Status ......: Pendente
   ----------------------------------------------------------
 Total de tarefas pendentes: 1
 ```
 
 ## Testes automatizados
+
+Localmente:
 
 ```bash
 python -m pytest -v
@@ -219,7 +313,9 @@ Os testes cobrem as validações de título, prioridade e data (`tests/test_util
 
 ## Histórico de versionamento
 
-O desenvolvimento foi registrado em commits incrementais:
+O desenvolvimento foi registrado em commits incrementais, mantidos desde a Fase 2:
+
+**Fase 2 — Desenvolvimento**
 
 1. Commit inicial com `README.md`, `.gitignore` e o documento da Fase 1 (`docs/planejamento_logico.pdf`);
 2. Estrutura principal em `src/main.py` (menu e loop principal) e modelo da tarefa;
@@ -227,13 +323,22 @@ O desenvolvimento foi registrado em commits incrementais:
 4. Gerenciador de tarefas com ID sequencial, ordenação, conclusão, remoção e resumo;
 5. Persistência das tarefas em `data/tarefas.json`;
 6. Testes automatizados e `requirements.txt`;
-7. Documentação final do README.
+7. Documentação do README.
+
+**Fase 3 — Conteinerização e orquestração**
+
+8. `Dockerfile` e `.dockerignore` para empacotar a aplicação;
+9. `docker-compose.yml` para a execução interativa da CLI com volume de dados;
+10. README atualizado com o guia Docker.
 
 Para consultar: `git log --oneline`.
 
-## Próximos passos (Fase 3)
+## Evolução do projeto
 
-- Empacotamento da aplicação;
-- Containerização com **Docker** (`Dockerfile`);
-- Ampliação dos testes automatizados;
-- Deploy.
+| Fase | Papel | Entrega |
+|---|---|---|
+| **Fase 1** | Arquiteto(a) de Software | Planejamento lógico, decomposição do problema e algoritmo em português ([`docs/planejamento_logico.pdf`](docs/planejamento_logico.pdf)) |
+| **Fase 2** | Desenvolvedor(a) | Código Python versionado com menu CLI e regras de negócio (`src/`) |
+| **Fase 3** | Engenheiro(a) DevOps | Imagem Docker e orquestração com Docker Compose (`Dockerfile`, `docker-compose.yml`) |
+
+O projeto saiu de um planejamento em papel, virou código que funciona na máquina do desenvolvedor e agora roda de forma idêntica em qualquer ambiente com Docker.
