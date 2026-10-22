@@ -1,0 +1,18 @@
+# Arquivos que não precisam ser enviados ao contexto de build do Docker.
+# Deixa o build mais rápido e a imagem mais leve.
+.git/
+.gitignore
+.dockerignore
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.pytest_cache/
+.vscode/
+.idea/
+tests/
+docs/
+*.md
+Dockerfile
+docker-compose.yml
