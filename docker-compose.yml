@@ -1,0 +1,27 @@
+# ----------------------------------------------------------------------
+# docker-compose.yml - TaskTracker (Fase 3: Orquestração)
+#
+# Orquestra a execução interativa da CLI.
+#   Executar (recomendado):  docker compose run --rm tasktracker-app
+#
+# Observação: use "docker compose run" e não "docker compose up".
+# O "up" não conecta o teclado do usuário ao input() da aplicação.
+# ----------------------------------------------------------------------
+
+services:
+  tasktracker-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: tasktracker-app
+
+    # Canal de interatividade entre o terminal do usuário e o container:
+    stdin_open: true   # mantém o canal de entrada de dados (stdin) aberto -> equivale ao "-i"
+    tty: true          # aloca um terminal virtual, simulando o console     -> equivale ao "-t"
+
+    # Persiste data/tarefas.json entre execuções, mesmo após remover o container.
+    volumes:
+      - tasktracker-dados:/app/data
+
+volumes:
+  tasktracker-dados:
